@@ -5,6 +5,7 @@ import re
 import os
 import requests
 import base64
+import uuid
 from typing import AsyncIterator
 
 try:
@@ -16,14 +17,15 @@ except ImportError:
 
 from ..base_provider import ProviderModelMixin, AsyncAuthedProvider, AuthResult
 from ..helper import format_prompt, format_image_prompt, get_last_user_message
-from ...typing import AsyncResult, Messages, Cookies, ImagesType
+from ...typing import AsyncResult, Messages, Cookies, MediaListType
 from ...errors import MissingRequirementsError, MissingAuthError, ResponseError
 from ...image import to_bytes
 from ...requests import get_args_from_nodriver, DEFAULT_HEADERS
 from ...requests.raise_for_status import raise_for_status
-from ...providers.response import JsonConversation, ImageResponse, Sources, TitleGeneration, Reasoning, RequestLogin
+from ...providers.response import JsonConversation, ImageResponse, Sources, TitleGeneration, Reasoning, RequestLogin, FinishReason
 from ...cookies import get_cookies
-from .models import default_model, fallback_models, image_models, model_aliases, llama_models
+from ...tools.media import merge_media
+from .models import default_model, default_vision_model, fallback_models, image_models, model_aliases
 from ... import debug
 
 class Conversation(JsonConversation):
@@ -31,13 +33,16 @@ class Conversation(JsonConversation):
         self.models: dict = models
 
 class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
-    url = "https://huggingface.co/chat"
+    domain = "huggingface.co"
+    origin = f"https://{domain}"
+    url = f"{origin}/chat"
 
     working = True
     use_nodriver = True
     supports_stream = True
     needs_auth = True
     default_model = default_model
+    default_vision_model = default_vision_model
     model_aliases = model_aliases
     image_models = image_models
     text_models = fallback_models
@@ -65,7 +70,7 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
     @classmethod
     async def on_auth_async(cls, cookies: Cookies = None, proxy: str = None, **kwargs) -> AsyncIterator:
         if cookies is None:
-            cookies = get_cookies("huggingface.co", single_browser=True)
+            cookies = get_cookies(cls.domain, single_browser=True)
         if "hf-chat" in cookies:
             yield AuthResult(
                 cookies=cookies,
@@ -73,14 +78,21 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
                 headers=DEFAULT_HEADERS
             )
             return
-        yield RequestLogin(cls.__name__, os.environ.get("G4F_LOGIN_URL") or "")
-        yield AuthResult(
-            **await get_args_from_nodriver(
-                cls.url,
-                proxy=proxy,
-                wait_for='form[action="/chat/logout"]'
+        if cls.needs_auth:
+            yield RequestLogin(cls.__name__, os.environ.get("G4F_LOGIN_URL") or "")
+            yield AuthResult(
+                **await get_args_from_nodriver(
+                    cls.url,
+                    proxy=proxy,
+                    wait_for='form[action$="/logout"]'
+                )
             )
-        )
+        else:
+            yield AuthResult(
+                cookies = {
+                    "hf-chat": str(uuid.uuid4())  # Generate a session ID
+                }
+            )
 
     @classmethod
     async def create_authed(
@@ -89,7 +101,7 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
         messages: Messages,
         auth_result: AuthResult,
         prompt: str = None,
-        images: ImagesType = None,
+        media: MediaListType = None,
         return_conversation: bool = False,
         conversation: Conversation = None,
         web_search: bool = False,
@@ -97,8 +109,8 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
     ) -> AsyncResult:
         if not has_curl_cffi:
             raise MissingRequirementsError('Install "curl_cffi" package | pip install -U curl_cffi')
-        if model == llama_models["name"]:
-            model = llama_models["text"] if images is None else llama_models["vision"]
+        if not model and media is not None:
+            model = cls.default_vision_model
         model = cls.get_model(model)
 
         session = Session(**auth_result.get_dict())
@@ -130,21 +142,20 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
 
         headers = {
             'accept': '*/*',
-            'origin': 'https://huggingface.co',
-            'referer': f'https://huggingface.co/chat/conversation/{conversationId}',
+            'origin': cls.origin,
+            'referer': f'{cls.url}/conversation/{conversationId}',
         }
         data = CurlMime()
         data.addpart('data', data=json.dumps(settings, separators=(',', ':')))
-        if images is not None:
-            for image, filename in images:
-                data.addpart(
-                    "files",
-                    filename=f"base64;{filename}",
-                    data=base64.b64encode(to_bytes(image))
-                )
+        for image, filename in merge_media(media, messages):
+            data.addpart(
+                "files",
+                filename=f"base64;{filename}",
+                data=base64.b64encode(to_bytes(image))
+            )
 
         response = session.post(
-            f'https://huggingface.co/chat/conversation/{conversationId}',
+            f'{cls.url}/conversation/{conversationId}',
             headers=headers,
             multipart=data,
             stream=True
@@ -158,26 +169,26 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
             try:
                 line = json.loads(line)
             except json.JSONDecodeError as e:
-                debug.log(f"Failed to decode JSON: {line}, error: {e}")
+                debug.error(f"Failed to decode JSON: {line}, error: {e}")
                 continue
             if "type" not in line:
                 raise RuntimeError(f"Response: {line}")
             elif line["type"] == "stream":
                 yield line["token"].replace('\u0000', '')
             elif line["type"] == "finalAnswer":
+                if sources is not None:
+                    yield sources
+                yield FinishReason("stop")
                 break
             elif line["type"] == "file":
-                url = f"https://huggingface.co/chat/conversation/{conversationId}/output/{line['sha']}"
+                url = f"{cls.url}/conversation/{conversationId}/output/{line['sha']}"
                 yield ImageResponse(url, format_image_prompt(messages, prompt), options={"cookies": auth_result.cookies})
             elif line["type"] == "webSearch" and "sources" in line:
                 sources = Sources(line["sources"])
             elif line["type"] == "title":
                 yield TitleGeneration(line["title"])
             elif line["type"] == "reasoning":
-                yield Reasoning(line.get("token"), line.get("status"))
-
-        if sources is not None:
-            yield sources
+                yield Reasoning(line.get("token"), status=line.get("status"))
 
     @classmethod
     def create_conversation(cls, session: Session, model: str):
@@ -186,7 +197,7 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
         json_data = {
             'model': model,
         }
-        response = session.post('https://huggingface.co/chat/conversation', json=json_data)
+        response = session.post(f'{cls.url}/conversation', json=json_data)
         if response.status_code == 401:
             raise MissingAuthError(response.text)
         if response.status_code == 400:
@@ -197,7 +208,7 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
     @classmethod
     def fetch_message_id(cls, session: Session, conversation_id: str):
         # Get the data response and parse it properly
-        response = session.get(f'https://huggingface.co/chat/conversation/{conversation_id}/__data.json?x-sveltekit-invalidated=11')
+        response = session.get(f'{cls.url}/conversation/{conversation_id}/__data.json?x-sveltekit-invalidated=11')
         raise_for_status(response)
 
         # Split the response content by newlines and parse each line as JSON
@@ -212,7 +223,7 @@ class HuggingChat(AsyncAuthedProvider, ProviderModelMixin):
                             break
                     except json.JSONDecodeError:
                         continue
-                        
+
             if not json_data:
                 raise RuntimeError("Failed to parse response data")
 

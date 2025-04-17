@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import os
 import uuid
 from flask import render_template, redirect
 
@@ -16,6 +19,14 @@ class Website:
                 'function': self._chat,
                 'methods': ['GET', 'POST']
             },
+            '/chat/<share_id>/': {
+                'function': self._share_id,
+                'methods': ['GET', 'POST']
+            },
+            '/chat/<share_id>/<conversation_id>': {
+                'function': self._share_id,
+                'methods': ['GET', 'POST']
+            },
             '/chat/menu/': {
                 'function': redirect_home,
                 'methods': ['GET', 'POST']
@@ -28,15 +39,27 @@ class Website:
                 'function': redirect_home,
                 'methods': ['GET', 'POST']
             },
+            '/background': {
+                'function': self._background,
+                'methods': ['GET']
+            },
         }
 
     def _chat(self, conversation_id):
         if conversation_id == "share":
-            return render_template('index.html', chat_id=str(uuid.uuid4()))
-        return render_template('index.html', chat_id=conversation_id)
+            return render_template('index.html', conversation_id=str(uuid.uuid4()))
+        return render_template('index.html', conversation_id=conversation_id)
+
+    def _share_id(self, share_id, conversation_id: str = ""):
+        share_url = os.environ.get("G4F_SHARE_URL", "")
+        conversation_id = conversation_id if conversation_id else str(uuid.uuid4())
+        return render_template('index.html', share_url=share_url, share_id=share_id, conversation_id=conversation_id)
 
     def _index(self):
-        return render_template('index.html', chat_id=str(uuid.uuid4()))
+        return render_template('index.html', conversation_id=str(uuid.uuid4()))
 
     def _settings(self):
-        return render_template('index.html', chat_id=str(uuid.uuid4()))
+        return render_template('index.html', conversation_id=str(uuid.uuid4()))
+
+    def _background(self):
+        return render_template('background.html')
