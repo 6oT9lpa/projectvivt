@@ -1,0 +1,122 @@
+/* Основные переменные */
+:root {
+    --primary-color: #2F4B26;
+    --secondary-color: #668F4E;
+    --accent-color: #3A5F73;
+    --dark-color: #0C1A22;
+    --light-color: #F4FAED;
+    --neon-accent: #7AFF7A;
+    --cyber-border: 1px solid rgba(122, 255, 122, 0.3);
+    --deep-space: linear-gradient(45deg, #0C1A22 0%, #1A3A4F 100%);
+    --cyber-gradient: linear-gradient(135deg, #3A5F73 0%, #668F4E 100%);
+    --glass-bg: rgba(15, 54, 45, 0.25);
+    --blur: blur(15px);
+    --border-radius: 12px;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 100vh;
+}
+/* Сброс стилей */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    background: var(--deep-space);
+    color: #fff;
+    overflow-x: hidden;
+}
+
+/* Лоадер */
+.loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: var(--primary-color);
+    transform-origin: left;
+    animation: loader 2s linear;
+    z-index: 9999;
+}
+
+@keyframes loader {
+    to { transform: scaleX(1); }
+}
+
+/* Кастомный скроллбар */
+::-webkit-scrollbar {
+    width: 10px ;
+    height: 10px ;
+    background: rgba(0, 0, 0, 0.2) ;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(12, 26, 34, 0.8) ;
+    border-radius: 4px ;
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3) ;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--deep-space) ;
+    border-radius: 4px ;
+    border: 2px solid rgba(122, 255, 122, 0.3) ;
+    background-clip: padding-box ;
+    transition: var(--transition) ;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    box-shadow: 0 0 15px rgba(122, 255, 122, 0.3) ;
+}
+
+.notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    color: white;
+    z-index: 1001;
+    animation: slideIn 0.3s ease-out;
+    backdrop-filter: blur(10px);
+    border: 1px solid;
+    max-width: 300px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+
+.notification.success {
+    background: rgba(122, 255, 122, 0.2);
+    border-color: #7AFF7A;
+}
+
+.notification.error {
+    background: rgba(255, 77, 77, 0.2);
+    border-color: #FF4D4D;
+}
+
+.notification.warning {
+    background: rgba(255, 165, 0, 0.2);
+    border-color: #FFA500;
+}
+
+.notification.fade-out {
+    animation: fadeOut 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}

@@ -1,0 +1,380 @@
+<!-- admin_panel.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - TEXTHUB</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/root-style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/adminpanel-style.css') }}">
+</head>
+<body>
+    <div class="cyber-admin-container">
+        <!-- Навигация -->
+        <nav class="admin-nav cyber-glass">
+            <div class="admin-nav-item active" data-tab="users" onclick="handleNavClick('users', this)">
+                <i class="fas fa-users-cog"></i>
+                <span>Пользователи</span>
+                <div class="nav-indicator"></div>
+            </div>
+            <div class="admin-nav-item" data-tab="roles" onclick="handleNavClick('roles', this)">
+                <i class="fas fa-shield-alt"></i>
+                <span>Группы</span>
+                <div class="nav-indicator"></div>
+            </div>
+            <div class="admin-nav-item" data-tab="functions" onclick="handleNavClick('functions', this)">
+                <i class="fas fa-code"></i>
+                <span>Функции</span>
+                <div class="nav-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Контент -->
+        <div class="admin-content">
+            <!-- Пользователи -->
+            <section class="admin-section active" style='opacity: 1;' id="users">
+                <div class="section-header cyber-glow">
+                    <h2><i class="fas fa-user-astronaut"></i> Управление пользователями</h2>
+                    <div class="search-box" onclick="this.classList.add('active')">
+                        <input type="text" 
+                            placeholder="Поиск по: имени, email, роли..." 
+                            class="cyber-input"
+                            onblur="this.parentElement.classList.remove('active')"
+                            aria-label="Поиск пользователей">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <button class="clear-search">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="user-grid">
+                    {% for user in users %}
+                    <div class="user-card cyber-effect" data-user-id="{{ user.id }}">
+                        <div class="user-avatar">
+                            <i class="fas fa-user-secret"></i>
+                            <span class="status {{ 'online' if user.status else 'offline' }}"></span>
+                        </div>
+                        <div class="user-info">
+                            <h4>{{ user.username }}</h4>
+                            <p>{{ user.email }}</p>
+                            <div class="user-meta">
+                                <div class="user-roles">
+                                    {% if user.roles|length == 1 %}
+                                        <span class="role-badge">{{ user.roles[0].name }}</span>
+                                    {% elif user.roles|length > 1 %}
+                                        <span class="role-badge">{{ user.roles[0].name }}</span>
+                                        <span class="role-more" onclick="showUserRoles('{{ user.id }}')">
+                                            +{{ user.roles|length - 1 }}
+                                        </span>
+                                    {% else %}
+                                        <span class="role-badge">No roles</span>
+                                    {% endif %}
+                                </div>
+                                <span class="date">register - {{ user.registered_at }}</span>
+                            </div>
+                        </div>
+                        <button class="user-settings-btn" onclick="openUserModal('{{ user.id }}')">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <!-- Функции -->
+            <section class="admin-section" style='display: none;' id="functions">
+                <div class="section-header cyber-glow">
+                    <h2><i class="fas fa-cubes"></i> Управление функциями</h2>
+                    <div class="function-controls">
+                        <button class="cyber-btn" onclick="showCreateFunctionModal()">
+                            <i class="fas fa-plus"></i> Новая функция
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="function-table">
+                    <div class="table-header">
+                        <div>Название</div>
+                        <div>Статус</div>
+                        <div>Автор</div>
+                        <div>Дата</div>
+                        <div>Действия</div>
+                    </div>
+                    {% for func in functions %}
+                    <div class="function-row">
+                        <div class="func-name">
+                            <i class="fab fa-python"></i>
+                            {{ func.name }}
+                        </div>
+                        <div class="func-status">
+                            <label class="cyber-switch">
+                                <input type="checkbox" 
+                                        data-func-id="{{ func.id }}"
+                                        {{ 'checked' if func.approved }}
+                                        onchange="toggleFunctionStatus('{{ func.id }}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="func-author">{{ func.author.username }}</div>
+                        <div class="func-date">{{ func.created_at.strftime('%d.%m.%Y') }}</div>
+                        <div class="func-actions">
+                            <button class="icon-btn" onclick="editFunction('{{ func.id }}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="icon-btn danger" onclick="deleteFunction('{{ func.id }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <!-- Роли -->
+            <section class="admin-section" id="roles" style='display: none;'>
+                <div class="section-header cyber-glow">
+                    <h2><i class="fas fa-user-tag"></i> Управление группами</h2>
+                    <button class="cyber-btn" onclick="showRoleModal()">
+                        <i class="fas fa-plus"></i> Новая группа
+                    </button>
+                </div>
+                
+                <div class="role-grid" id="rolesContainer">
+                    {% for role in roles %}
+                    <div class="role-card" data-role-id="{{ role.id }}">
+                        <div class="role-header">
+                            <h4>{{ role.name }}</h4>
+                            <div class="role-controls">
+                                <button class="icon-btn" onclick="showRoleModal({{ role.id }})">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                <button class="icon-btn danger" onclick="deleteRole({{ role.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="role-perms">
+                            {% for func in role.functions[:2] %}
+                            <span class="perm-tag {{ 'active' if func.approved else 'danger' }}" 
+                                data-func-id="{{ func.id }}">
+                                {{ func.name }}
+                            </span>
+                            {% endfor %}
+                            {% if role.functions|length > 2 %}
+                            <span class="perm-tag more-funcs" title="Показать все функции">
+                                +{{ role.functions|length - 2 }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div id="userModal" class="cyber-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-user-cog neon-pulse"></i> Управление пользователем</h3>
+                <button class="close-btn cyber-glitch" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="cyber-form-grid">
+                    <!-- Блок информации -->
+                    <div class="info-card cyber-tile">
+                        <div class="info-item">
+                            <span class="info-label"><i class="fas fa-id-card"></i> ID:</span>
+                            <span class="info-value" id="modalUserId"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label"><i class="fas fa-user-ninja"></i> Логин:</span>
+                            <span class="info-value" id="modalUserLogin"></span>
+                        </div>
+                    </div>
+    
+                    <!-- Форма редактирования -->
+                    <div class="cyber-form">
+                        <div class="form-group">
+                            <label class="cyber-label"><i class="fas fa-shield-alt"></i> Выбор группы</label>
+                            <div class="cyber-select-wrapper">
+                                <select class="cyber-select" id="roleSelector" onchange="addSelectedRole()">
+                                    <option value="">Выберите группу</option>
+                                    {% for role in roles %}
+                                        <option value="{{ role.id }}">{{ role.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="select-arrow"></div>
+                            </div>
+                        </div>
+    
+                        <div class="form-group">
+                            <label class="cyber-label"><i class="fas fa-users"></i> Текущие группы пользователя</label>
+                            <div class="selected-functions">
+                                <div class="perm-grid" id="selectedRoles">
+                                    <!-- Здесь будут отображаться выбранные роли -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+            <div class="modal-footer">
+                <button class="cyber-btn save-btn" onclick="saveUserChanges()">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <span>Синхронизировать</span>
+                    <div class="glow"></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="roleModal" class="cyber-modal" >
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id='headerModal'><i class="fas fa-user-tag neon-pulse"></i></h3>
+                <button class="close-btn cyber-glitch" onclick="closeRoleModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="cyber-form-grid">
+                    <!-- Основные настройки -->
+                    <div class="info-card cyber-tile">
+                        <div class="form-group">
+                            <label class="cyber-label">Название группы</label>
+                            <input type="text" id="roleName" class="cyber-input" placeholder="Cyber Admin">
+                        </div>
+                        <div class="form-group">
+                            <label class="cyber-label">Описание группы</label>
+                            <input type="text" id="roleDescription" class="cyber-input" placeholder="Cyber Admin">
+                        </div>
+                        
+                        <div class="role-meta">
+                            <label class="cyber-switch">
+                                <label class="cyber-switch">
+                                    <input type="checkbox" id="isAdmin" class='permissions'>
+                                    <span class="slider"></span>
+                                </label>
+                                Администратор
+                            </label>
+                        </div>
+                    </div>
+    
+                    <!-- Управление функциями -->
+                    <div class="cyber-form">
+                        <div class="form-group">
+                            <label class="cyber-label">Доступные функции</label>
+                            <div class="cyber-select-wrapper">
+                                <select class="cyber-select" id="functionSelector">
+                                    <option value="">Выберите функцию</option>
+                                    {% for func in functions %}
+                                    <option value="{{ func.id }}">{{ func.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="select-arrow"></div>
+                            </div>
+                        </div>
+    
+                        <div class="selected-functions">
+                            <h4>Выбранные функции:</h4>
+                            <div class="perm-grid" id="selectedFunctions">
+                                <!-- Динамически добавляются выбранные функции -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+            <div class="modal-footer">
+                <button class="cyber-btn save-btn" onclick="saveRole()">
+                    <i class="fas fa-save"></i>
+                    <span>Сохранить</span>
+                    <div class="glow"></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="createFunctionModal" class="cyber-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-code neon-pulse"></i> Новая функция</h3>
+                <button class="close-btn cyber-glitch" onclick="closeCreateFunctionModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <form id="functionForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="cyber-label">Название функции</label>
+                        <input type="text" id="functionName" class="cyber-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="cyber-label">Описание функции</label>
+                        <textarea id="functionDescription" class="cyber-input" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="cyber-label">Тип функции</label>
+                        <select id="functionType" class="cyber-input" required>
+                            <option value="text/code">Текст/Код</option>
+                            <option value="image">Изображения</option>
+                            <option value="link">Ссылки</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="cyber-label">Загрузите файлы</label>
+                        <div class="file-upload-container">
+                            <label class="cyber-upload-btn">
+                                <i class="fas fa-file-code"></i> Код функции (.py)
+                                <input type="file" id="functionCodeFile" accept=".py" hidden>
+                            </label>
+                            <label class="cyber-upload-btn">
+                                <i class="fas fa-file-alt"></i> Тест-кейсы (.json)
+                                <input type="file" id="testCasesFile" accept=".json" hidden>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" class="cyber-btn" onclick="testFunction()">
+                            <i class="fas fa-vial"></i> Протестировать
+                        </button>
+                        <button type="submit" class="cyber-btn save-btn">
+                            <i class="fas fa-save"></i> Сохранить
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Сайдбар для просмотра содержимого файлов -->
+    <div id="fileViewerSidebar" class="cyber-sidebar">
+        <div class="sidebar-header">
+            <h3 id="fileViewerTitle"></h3>
+            <button class="close-btn" onclick="closeFileViewer()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="sidebar-content">
+            <pre id="fileContent"></pre>
+        </div>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/root-script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin-script.js') }}"></script>
+</body>
+</html>

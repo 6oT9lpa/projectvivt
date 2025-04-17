@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Processing Hub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/root-style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index-style.css') }}">
+</head>
+<body>
+    <div class="loader"></div>
+    
+    <nav class="nav-menu glass-effect cyber-border">
+        <div class="nav-brand glow-text">TEXTHUB</div>
+        <div class="nav-links">
+            {% if current_user.is_authenticated %}
+                <div class="dropdown">
+                    <a class="dropbtn cyber-btn">
+                        <i class="fas fa-terminal"></i> 
+                        МЕНЮ 
+                        <i class="fas fa-chevron-down"></i>
+                    </a>
+                    <div class="dropdown-content cyber-menu">
+                        <a href="{{ url_for('main.profile')}}"><i class="fas fa-user-astronaut"></i> Профиль</a>
+                        <a href="#settings"><i class="fas fa-cog"></i> Настройки</a>
+                        <a href="{{ url_for('main.logout')}}"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+                    </div>
+                </div>
+            {% else %}
+                <a href="#login" class="nav-link cyber-btn" onclick='showModal(document.querySelector("#loginModal"))'>
+                    <i class="fas fa-key"></i> Вход
+                </a>
+                <a href="#register" class="nav-link cyber-btn" onclick='showModal(document.querySelector("#regModal"))'>
+                    <i class="fas fa-user-plus"></i> Регистрация
+                </a>
+            {% endif %}
+        </div>
+        <div class="burger-menu cyber-btn">
+            <i class="fas fa-bars"></i>
+        </div>
+    </nav>
+
+    <header class="hero cyber-gradient">
+        <div class="container">
+            <h1 class="animate-slide-up cyber-title">
+                <span class="glow-text">TEXT</span> PROCESSING HUB
+            </h1>
+            <p class="animate-slide-up delay-1 cyber-subtitle">
+                ▷_ Развертывание пользовательских алгоритмов обработки данных
+            </p>
+            <div class="search-container animate-slide-up delay-2 cyber-input">
+                <input type="text" placeholder="Введите команду поиска...">
+                <button class="search-btn cyber-btn">
+                    <i class="fas fa-search"></i>
+                    SCAN
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="features animate-on-scroll">
+            <div class="feature-card cyber-card">
+                <div class="card-header">
+                    <i class="fas fa-rocket"></i>
+                    <h3>СОЗДАВАЙТЕ ФУНКЦИИ</h3>
+                </div>
+                <div class="card-body">
+                    <p>Реализация алгоритмов на Python с проверкой безопасности</p>
+                    <div class="cyber-border-bottom"></div>
+                    <div class="stats">
+                        <span>+150 функций</span>
+                        <span>99.9% uptime</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card cyber-card">
+                <div class="card-header">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>БЕЗОПАСТНОСТЬ</h3>
+                </div>
+                <div class="card-body">
+                    <p>Изолированные контейнеры с системой мониторинга</p>
+                    <div class="cyber-border-bottom"></div>
+                    <div class="stats">
+                        <span>Docker</span>
+                        <span>AI Audit</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card cyber-card">
+                <div class="card-header">
+                    <i class="fas fa-brain"></i>
+                    <h3>ИНТЕГРАЦИЯ С ИИ</h3>
+                </div>
+                <div class="card-body">
+                    <p>Чат-интерфейс с возможностью цепочного выполнения</p>
+                    <div class="cyber-border-bottom"></div>
+                    <div class="stats">
+                        <span>GPT-4</span>
+                        <span>TensorFlow</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="cyber-footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-section">
+                    <h4 class="glow-text">TEXTHUB v1.0</h4>
+                    <div class="cyber-border-bottom"></div>
+                    <p>Платформа для разработки и выполнения алгоритмов</p>
+                    <div class="social-links">
+                        <a href="#"><i class="fab fa-github"></i></a>
+                        <a href="#"><i class="fab fa-discord"></i></a>
+                        <a href="#"><i class="fas fa-terminal"></i></a>
+                    </div>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>СИСТЕМНЫЕ СТАТУСЫ</h4>
+                    <div class="cyber-border-bottom"></div>
+                    <div class="status-list">
+                        <div class="status-item online">
+                            <i class="fas fa-server"></i> Все системы активны
+                        </div>
+                        <div class="status-item users">
+                            <i class="fas fa-users"></i> 1 подключение
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Модальное окно -->
+    <div class="modal hidden-modal" id='loginModal'>
+        <div class="modal-content glass-effect" id='loginModalContent'>
+            <div class="modal-header">
+                <h2>Вход в аккаунт</h2>
+                <span class="close-modal" onclick='hideModal(document.querySelector("#loginModal"))'>&times;</span>
+            </div>
+            <form id="authForm">
+                <div class="form-group">
+                    <input type="text" name='username' placeholder="Введите username" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" name='password' placeholder="Введите password" required>
+                </div>
+                <button type="submit" class="btn cyber-btn">войти</button>
+            </form>
+            <div class="auth-links">
+                <a href="#forgot-password">Забыли пароль?</a>
+                <a  onclick='hideModal(document.querySelector("#loginModal"));showModal(document.querySelector("#regModal"))'>Нет аккаунта? Создать</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal hidden-modal" id="regModal">
+        <div class="modal-content glass-effect" id="regModalContent">
+            <div class="modal-header">
+                <h2>Регистрация</h2>
+                <span class="close-modal" onclick='hideModal(document.querySelector("#regModal"))'>&times;</span>
+            </div>
+            <form id="regForm">
+                <div class="form-group">
+                    <input type="email" name='email' placeholder="Введите email" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" name='username' placeholder="Введите username" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" name='password' placeholder="Введите password" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" name='c_password' placeholder="Повторите password" required>
+                </div>
+                <button type="submit" class="btn cyber-btn">Зарегистрироваться</button>
+            </form>
+            <div class="auth-links">
+                <a onclick='hideModal(document.querySelector("#regModal"));showModal(document.querySelector("#loginModal"))'>Войти в аккаунт</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/root-script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/index-script.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            {% if show_login_modal %}
+                showModal(document.querySelector("#loginModal"));
+            {% endif %}
+        });
+        </script>
+</body>
+</html>

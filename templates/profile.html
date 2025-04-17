@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Processing Hub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/root-style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-okaidia.min.css">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+</head>
+<body>
+    <div class="loader"></div>
+
+    <section class="profile-container container">
+        <!-- Сайдбар профиля -->
+        <aside class="profile-sidebar glass-effect animate-slide-up">
+            <div class="user-info">
+                <div class="avatar">
+                    <i class="fas fa-user-astronaut fa-3x"></i>
+                </div>
+                <div class="user-stat">
+                    <h2>{{ current_user.username }}</h2>
+                    <p class="user-email">{{ current_user.email }}</p>
+                </div>
+            <div class="stats-grid">
+            <div class="stat-card">
+                    <span class="stat-value">{{ current_user.roles|map(attribute='functions')|sum(start=[])|unique|list|length }}</span>
+                    <span class="stat-label">Доступные</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ current_user.roles|map(attribute='functions')|sum(start=[])|selectattr('approved')|unique|list|length }}</span>
+                    <span class="stat-label">Включенные</span>
+                </div>
+            </div>
+            {% if current_user.roles|selectattr('is_admin')|list or current_user.roles|selectattr('is_moderator')|list %}
+                <button class="btn btn-primary full-width" onclick="window.location.href='/admin-panel'">
+                    <i class="fas fa-lock"></i>
+                    Админ панель
+                </button>
+            {% endif %}
+            </div>
+        </aside>
+
+        <!-- Основной контент -->
+        <main class="profile-main">
+            <!-- Секция функций -->
+            <section class="my-functions">
+                <header class="section-header">
+                    <h2><i class="fas fa-code-branch"></i> Доступные функции</h2>
+                    <div class="function-actions">
+                        <div class="function-filters">
+                            <button class="filter-btn active" data-filter="all">Все</button>
+                            <button class="filter-btn" data-filter="enabled">Включенные</button>
+                            <button class="filter-btn" data-filter="disabled">Выключенные</button>
+                        </div>
+                    </div>
+                </header>
+                <button class="chat-toggle-btn" onclick="toggleChat()">
+                    <i class="fas fa-robot"></i> Помощник AI
+                </button>
+                <div class="functions-grid">
+                    {% for func in current_user.functions %}
+                    <div class="function-card glass-effect animate-slide-up" data-status="{{ 'approved' if func.approved else 'pending' }}">
+                        <div class="card-header">
+                            <div class='group-header'>
+                                <i class="fab fa-python"></i>
+                                <h3>{{ func.name }}</h3>
+                            </div>
+                            <div class="status-badge {{ 'status-approved' if func.approved else 'status-pending' }}">
+                                <i class="fas fa-{{ 'check-circle' if func.approved else 'clock' }}"></i>
+                                {{ 'Одобрено' if func.approved else 'На проверке' }}
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <pre class="code-preview">{{ func.code|truncate(100) }}</pre>
+                            <div class="card-meta">
+                                <small>{{ func.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                                <button class="btn btn-icon" id='editor' onclick="openFunctionModal('{{ func.id }}')">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <!-- Секция чата -->
+            <div class="chat-section glass-effect">
+                <header class="section-header" onclick="toggleChat()">
+                    <h2><i class="fas fa-robot"></i> AI Чат-помощник</h2>
+
+                    <div class="chat-controls">
+                        <select id="functionSelect" onchange="selectFunction(this)">
+                            <option value="">-- Выберите функцию --</option>
+                            {% for func in current_user.get_available_functions() %}
+                                <option value="{{ func.id }}">{{ func.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </header>
+
+                <div class="chat-messages" id="chatMessages">
+                    {% if chat %}
+                        {% for message in chat.messages %}
+                            <div class="message {% if message.is_bot %}bot-message{% else %}user-message{% endif %}">
+                                <div class="message-avatar">
+                                    <i class="fas fa-{% if message.is_bot %}robot{% else %}user{% endif %}"></i>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-text">{{ message.content }}</div>
+                                    
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            
+                <div class="chat-input">
+                    <textarea id="messageInput" rows="8" placeholder="Введите сообщение..."></textarea>
+                    <button class="btn btn-primary btn-send" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </section>
+    
+    <!-- Модальное окно загрузки функции -->
+    <div class="cyber-modal" id="functionModal">
+        <div class="modal-content glass-effect">
+            <div class="modal-header">
+                <h2>{{ 'Редактирование' if edit_mode else 'Создание' }} функции</h2>
+                <span class="close-modal" onclick="closeFunctionModal()">&times;</span>
+            </div>
+            <form id="functionForm" enctype="multipart/form-data">
+                <input type="hidden" name="function_id" id="functionId">
+                <div class="form-group">
+                    <input type="text" name="name" id="functionName" placeholder="Название функции" required>
+                </div>
+                <div class="form-group">
+                    <textarea name="code" id="functionCode" placeholder="Код функции (Python)"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="functionFile">Или загрузите файл (.py)</label>
+                    <input type="file" name="file" id="functionFile" accept=".py">
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    {{ 'Сохранить' if edit_mode else 'Создать' }}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/root-script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/profile-script.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/chat-script.js') }}"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+</body>
+</html>
