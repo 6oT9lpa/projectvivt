@@ -388,29 +388,40 @@ header.chat-header {
 .typing-indicator {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 1rem;
-    background: rgba(122, 255, 122, 0.1);
-    border-radius: 1.5rem;
+    padding: 10px 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    margin: 10px 0;
     width: fit-content;
+    color: #aaa;
+    font-size: 0.9em;
 }
 
-.dot {
+.typing-indicator .dot {
     width: 8px;
     height: 8px;
-    background: #7AFF7A;
+    background: #666;
     border-radius: 50%;
-    animation: bounce 1.4s infinite;
+    margin: 0 2px;
+    animation: typingAnimation 1.4s infinite ease-in-out;
 }
 
-@keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
+.typing-indicator .dot:nth-child(1) {
+    animation-delay: 0s;
 }
 
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
+.typing-indicator .dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
 
+.typing-indicator .dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-5px); }
+}
 
 #editor {
     padding: 0.25rem .75rem;

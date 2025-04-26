@@ -83,10 +83,25 @@ socket.on('message_ack', (data) => {
     }
 });
 
+socket.on('update_message', (data) => {
+    const msgElement = document.querySelector(`[data-id="${data.id}"]`);
+    if (msgElement) {
+        msgElement.querySelector('.message-text').textContent = data.content;
+        msgElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+});
+
+socket.on('message_update_id', (data) => {
+    const msgElement = document.querySelector(`[data-id="${data.temp_id}"]`);
+    if (msgElement) {
+        msgElement.dataset.id = data.new_id;
+    }
+});
+
 socket.on('typing', (data) => {
     const typingIndicator = document.getElementById('typingIndicator');
-    if(data.status) {
-        if(!typingIndicator) {
+    if (data.status) {
+        if (!typingIndicator) {
             const indicator = `
                 <div class="typing-indicator" id="typingIndicator">
                     <div class="dot"></div>
@@ -95,12 +110,12 @@ socket.on('typing', (data) => {
                     <span>AI печатает...</span>
                 </div>`;
             document.getElementById('chatMessages').insertAdjacentHTML('beforeend', indicator);
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
         }
     } else {
         typingIndicator?.remove();
     }
 });
-
 
 let selectedFunctionId = null;
 let selectedFunctionInfo = null;

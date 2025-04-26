@@ -135,18 +135,29 @@ role_function = db.Table('role_function',
     db.Column('function_id', db.Integer, db.ForeignKey('function_user.id'))
 )
 
-from g4f.client import Client
+import g4f
+
+g4f.debug.logging = True 
+g4f.check_version = False
+
+print(g4f.version)
+print(g4f.Provider.Ails.params)
+
 class ChatAI:
     @staticmethod
-    def generate_response(prompt: str) -> str:
-        client = Client()
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        
-        return response.choices[0].message.content
-            
+    def generate_response_stream(prompt: str):
+        try:
+            response = g4f.ChatCompletion.create(
+                model=g4f.models.gpt_4,
+                messages=[{"role": "user", "content": prompt}],
+                stream=True
+            )
+            for chunk in response:
+                yield str(chunk)
+        except Exception as e:
+            print(f"Error generating AI response: {e}")
+            yield "Произошла ошибка при обработке запроса"
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -186,25 +197,44 @@ def handle_message(data):
             'timestamp': datetime.now(moscow_tz).strftime('%H:%M')
         })
         
+        # Отправляем индикатор печати
         emit('typing', {'status': True}, room=str(current_user.id))
         
-        ai_response = ChatAI.generate_response(data['text'])
+        # Создаем временное сообщение для бота
+        temp_msg_id = f"temp_{datetime.now().timestamp()}"
+        emit('new_message', {
+            'content': "",
+            'is_bot': True,
+            'id': temp_msg_id,
+            'timestamp': datetime.now(moscow_tz).strftime('%H:%M')
+        }, room=str(current_user.id))
         
-        bot_msg = Message(content=ai_response, chat=chat, is_bot=True)
+        # Отправляем ответ по частям
+        full_response = ""
+        for chunk in ChatAI.generate_response_stream(data['text']):
+            full_response += chunk
+            emit('update_message', {
+                'id': temp_msg_id,
+                'content': full_response
+            }, room=str(current_user.id))
+        
+        # Убираем индикатор печати
+        emit('typing', {'status': False}, room=str(current_user.id))
+        
+        # Сохраняем финальное сообщение в БД
+        bot_msg = Message(content=full_response, chat=chat, is_bot=True)
         db.session.add(bot_msg)
         db.session.commit()
         
-        emit('new_message', {
-            'content': ai_response,
-            'is_bot': True,
-            'id': bot_msg.id,
-            'timestamp': datetime.now(moscow_tz).strftime('%H:%M')
+        # Обновляем временное сообщение реальным ID
+        emit('message_update_id', {
+            'temp_id': temp_msg_id,
+            'new_id': bot_msg.id
         }, room=str(current_user.id))
         
     except Exception as e:
         print(f"Error: {str(e)}")
         emit('error', {'message': "Ошибка обработки запроса"})
-    finally:
         emit('typing', {'status': False}, room=str(current_user.id))
         
 with app.app_context():
