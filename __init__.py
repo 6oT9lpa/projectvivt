@@ -1,5 +1,6 @@
 from flask import Flask, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from flask_migrate import Migrate
 from flask_socketio import SocketIO, join_room, emit
 from config import Config
@@ -8,6 +9,7 @@ import pytz
 from datetime import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import timedelta 
+from limiter import limiter
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -19,6 +21,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'main.login'
 
 moscow_tz = pytz.timezone('Europe/Moscow')
+limiter.init_app(app)
 
 from main import main
 app.register_blueprint(main)
@@ -29,7 +32,7 @@ user_roles = db.Table('user_roles',
 )
 
 class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(64), unique=True)
     email = db.Column(db.String(120), unique=True)
     password = db.Column(db.String(256))
@@ -56,13 +59,31 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password, password)
     
-    def get_available_functions(self):
+    def get_available_functions(self, visiable=False):
         functions = []
+        seen_ids = set()
+        
         for role in self.roles:
+            if role.is_admin:
+                for func in FunctionUser.query.all():
+                    if func.id not in seen_ids:
+                        seen_ids.add(func.id)
+                        functions.append(func)
+                continue
+                
             for func in role.functions:
-                if func.approved and func not in functions:
-                    functions.append(func)
+                if func.id not in seen_ids:
+                    if visiable or func.approved:
+                        seen_ids.add(func.id)
+                        functions.append(func)
+        
         return functions
+    
+    def has_access_to_function(self, func_id):
+        if any(role.is_admin for role in self.roles):
+            return True
+            
+        return any(func.id == func_id for role in self.roles for func in role.functions)
     
 class Chat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -80,7 +101,7 @@ class FunctionUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100))
     description = db.Column(db.Text)  
-    code = db.Column(db.Text)
+    code = db.Column(db.String(100))  
     function_type = db.Column(db.String(20))  
     approved = db.Column(db.Boolean, default=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -120,7 +141,7 @@ class ChatAI:
     def generate_response(prompt: str) -> str:
         client = Client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="deepseek-chat",
             messages=[{"role": "user", "content": prompt}],
         )
         
@@ -249,7 +270,13 @@ def handle_execute_function(data):
         if 'Function' not in global_vars:
             raise Exception('Function class not defined')
             
-        result = global_vars['Function']().execute(local_vars['args'])
+        instance = global_vars['Function']()
+        
+        if not hasattr(instance, 'execute') or not callable(instance.execute):
+            raise Exception('Function class must have an "execute" method')
+        
+        result = instance.execute(local_vars['args'])
+        
         emit('function_result', {
             'success': True,
             'result': result

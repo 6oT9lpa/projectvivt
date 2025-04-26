@@ -7,11 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/root-style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profile-style.css') }}">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-okaidia.min.css">
-
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
 </head>
 <body>
     <div class="loader"></div>
@@ -27,84 +22,55 @@
                     <h2>{{ current_user.username }}</h2>
                     <p class="user-email">{{ current_user.email }}</p>
                 </div>
-            <div class="stats-grid">
-            <div class="stat-card">
-                    <span class="stat-value">{{ current_user.roles|map(attribute='functions')|sum(start=[])|unique|list|length }}</span>
-                    <span class="stat-label">Доступные</span>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value"><labe>Доступно: </label>{{ current_user.get_available_functions()|length }}</span>
+                        <span class="stat-label">Функциональнных модулей</span>
+                    </div>
+
                 </div>
-                <div class="stat-card">
-                    <span class="stat-value">{{ current_user.roles|map(attribute='functions')|sum(start=[])|selectattr('approved')|unique|list|length }}</span>
-                    <span class="stat-label">Включенные</span>
-                </div>
-            </div>
-            {% if current_user.roles|selectattr('is_admin')|list or current_user.roles|selectattr('is_moderator')|list %}
-                <button class="btn btn-primary full-width" onclick="window.location.href='/admin-panel'">
-                    <i class="fas fa-lock"></i>
-                    Админ панель
-                </button>
-            {% endif %}
+                {% if current_user.roles|selectattr('is_admin')|list or current_user.roles|selectattr('is_moderator')|list %}
+                    <button class="btn btn-primary full-width" onclick="window.location.href='/admin-panel'">
+                        <i class="fas fa-lock"></i>
+                        Админ панель
+                    </button>
+                {% endif %}
             </div>
         </aside>
 
         <!-- Основной контент -->
         <main class="profile-main">
-            <!-- Секция функций -->
-            <section class="my-functions">
-                <header class="section-header">
-                    <h2><i class="fas fa-code-branch"></i> Доступные функции</h2>
-                    <div class="function-actions">
-                        <div class="function-filters">
-                            <button class="filter-btn active" data-filter="all">Все</button>
-                            <button class="filter-btn" data-filter="enabled">Включенные</button>
-                            <button class="filter-btn" data-filter="disabled">Выключенные</button>
-                        </div>
-                    </div>
-                </header>
-                <button class="chat-toggle-btn" onclick="toggleChat()">
-                    <i class="fas fa-robot"></i> Помощник AI
+            <!-- Переключатель вкладок -->
+            <div class="tab-switcher">
+                <button class="tab-btn active" data-tab="functions">
+                    <i class="fas fa-code"></i>
+                    <span class="tab-label">Функциональные модули</span>
+                    <span class="mobile-label">Модули</span>
                 </button>
-                <div class="functions-grid">
-                    {% for func in current_user.functions %}
-                    <div class="function-card glass-effect animate-slide-up" data-status="{{ 'approved' if func.approved else 'pending' }}">
-                        <div class="card-header">
-                            <div class='group-header'>
-                                <i class="fab fa-python"></i>
-                                <h3>{{ func.name }}</h3>
-                            </div>
-                            <div class="status-badge {{ 'status-approved' if func.approved else 'status-pending' }}">
-                                <i class="fas fa-{{ 'check-circle' if func.approved else 'clock' }}"></i>
-                                {{ 'Одобрено' if func.approved else 'На проверке' }}
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <pre class="code-preview">{{ func.code|truncate(100) }}</pre>
-                            <div class="card-meta">
-                                <small>{{ func.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
-                                <button class="btn btn-icon" id='editor' onclick="openFunctionModal('{{ func.id }}')">
-                                    <i class="fas fa-ellipsis-h"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
+                <button class="tab-btn" data-tab="chat">
+                    <i class="fas fa-robot"></i>
+                    AI-бот
+                </button>
+            </div>
+
+            <!-- Секция функций -->
+            <section class="tab-content active" id="functions-tab">
+                <div class="function-selector">
+                    <select id="functionSelect" onchange="selectFunction(this)">
+                        <option value="">-- Выберите модуль --</option>
+                        {% for func in current_user.get_available_functions(visiable=show_all_functions) %}
+                            <option value="{{ func.id }}">{{ func.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="function-container" id="functionContainer">
+                    <!-- Здесь будет загружаться интерфейс выбранного модуля -->
                 </div>
             </section>
 
             <!-- Секция чата -->
-            <div class="chat-section glass-effect">
-                <header class="section-header" onclick="toggleChat()">
-                    <h2><i class="fas fa-robot"></i> AI Чат-помощник</h2>
-
-                    <div class="chat-controls">
-                        <select id="functionSelect" onchange="selectFunction(this)">
-                            <option value="">-- Выберите функцию --</option>
-                            {% for func in current_user.get_available_functions() %}
-                                <option value="{{ func.id }}">{{ func.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </header>
-
+            <section class="tab-content" id="chat-tab">
                 <div class="chat-messages" id="chatMessages">
                     {% if chat %}
                         {% for message in chat.messages %}
@@ -114,7 +80,6 @@
                                 </div>
                                 <div class="message-content">
                                     <div class="message-text">{{ message.content }}</div>
-                                    
                                 </div>
                             </div>
                         {% endfor %}
@@ -127,41 +92,79 @@
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
-            </div>
+            </section>
         </main>
     </section>
-    
-    <!-- Модальное окно загрузки функции -->
-    <div class="cyber-modal" id="functionModal">
-        <div class="modal-content glass-effect">
-            <div class="modal-header">
-                <h2>{{ 'Редактирование' if edit_mode else 'Создание' }} функции</h2>
-                <span class="close-modal" onclick="closeFunctionModal()">&times;</span>
-            </div>
-            <form id="functionForm" enctype="multipart/form-data">
-                <input type="hidden" name="function_id" id="functionId">
-                <div class="form-group">
-                    <input type="text" name="name" id="functionName" placeholder="Название функции" required>
-                </div>
-                <div class="form-group">
-                    <textarea name="code" id="functionCode" placeholder="Код функции (Python)"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="functionFile">Или загрузите файл (.py)</label>
-                    <input type="file" name="file" id="functionFile" accept=".py">
-                </div>
-                <button type="submit" class="btn btn-primary">
-                    {{ 'Сохранить' if edit_mode else 'Создать' }}
-                </button>
-            </form>
-        </div>
+
+    <!-- Подсказки -->
+    <div id="welcomeHint" class="hint-box" style="display: none;">
+        <h3>Добро пожаловать!</h3>
+        <p>Этот сервис позволяет использовать функциональные модули для обработки данных и общаться с AI-ассистентом.</p>
+        <button class="hint-close" onclick="closeHint('welcomeHint')">Понятно</button>
+    </div>
+
+    <div id="modulesHint" class="hint-box" style="display: none;">
+        <h3>Функциональные модули</h3>
+        <p>Здесь вы можете выбрать и использовать различные модули для обработки данных. Каждый модуль выполняет специфическую задачу.</p>
+        <button class="hint-close" onclick="closeHint('modulesHint')">Понятно</button>
+    </div>
+
+    <div id="activationHint" class="hint-box" style="display: none;">
+        <h3>Как использовать модули</h3>
+        <p>1. Выберите модуль из списка ( -- Выберите модуль -- )<br>2. Заполните необходимые поля<br>3. Нажмите "Выполнить"</p>
+        <button class="hint-close" onclick="closeHint('activationHint')">Понятно</button>
+    </div>
+
+    <div id="botHint" class="hint-box" style="display: none;">
+        <h3>AI-ассистент</h3>
+        <p>Здесь вы можете общаться с нашим AI-ассистентом, который поможет вам с вопросами по работе системы.</p>
+        <button class="hint-close" onclick="closeHint('botHint')">Понятно</button>
     </div>
 
     <script src="{{ url_for('static', filename='js/root-script.js') }}"></script>
     <script src="{{ url_for('static', filename='js/profile-script.js') }}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="{{ url_for('static', filename='js/chat-script.js') }}"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+
+    <script>
+        function showHints() {
+            const registrationTime = new Date("{{ current_user.registered_at }}").getTime();
+            const threeHoursAgo = Date.now() - (3 * 60 * 60 * 1000);
+            
+            if (registrationTime > threeHoursAgo) {
+                showHint('welcomeHint');
+                setTimeout(() => showHint('modulesHint'), 3500);
+                setTimeout(() => showHint('activationHint'), 7000);
+            }
+        }
+
+        function showHint(hintId) {
+            const hint = document.getElementById(hintId);
+            if (hint && hint.style.display === 'none') {
+                hint.style.display = 'block';
+                setTimeout(() => closeHint(hintId), 8000);
+            }
+        }
+        
+        function closeHint(hintId) {
+            const hint = document.getElementById(hintId);
+            if (hint) hint.style.display = 'none';
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            showHints();
+            selectFunction(1);
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabId = this.dataset.tab;
+                    if (tabId === 'functions') {
+                        showHint('modulesHint');
+                    } else if (tabId === 'chat') {
+                        showHint('botHint');
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

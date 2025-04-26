@@ -1,4 +1,4 @@
-/* Основные переменные */
+
 :root {
     --primary-color: #2F4B26;
     --secondary-color: #668F4E;
@@ -16,7 +16,6 @@
     --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 100vh;
 }
-/* Сброс стилей */
 * {
     margin: 0;
     padding: 0;
@@ -119,4 +118,49 @@ body {
 @keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+.error-message {
+    text-align: center;
+    padding: 2rem;
+    color: #ff4d4d; 
+}
+
+.error-message-warning {
+    text-align: center;
+    padding: 2rem;
+    color: #ffcc00; 
+}
+
+.error-message-not-found {
+    text-align: center;
+    padding: 2rem;
+    color: #6699ff; 
+}
+
+.error-message-access {
+    text-align: center;
+    padding: 2rem;
+    color: #9933cc; 
+}
+
+.error-message i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.retry-btn {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: rgba(122, 255, 122, 0.1);
+    border: 1px solid var(--neon-accent);
+    color: var(--light-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.retry-btn:hover {
+    background: rgba(122, 255, 122, 0.2);
 }

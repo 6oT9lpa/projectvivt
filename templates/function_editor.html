@@ -1,0 +1,109 @@
+<!-- templates/function_editor.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактор функции - {{ func.name }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/root-style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/function-editor.css') }}">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+</head>
+<body>
+    <div class="cyber-function-editor">
+        {% if view_only %}
+            <div class="editor-header cyber-glass">
+                <h2><i class="fab fa-python"></i> {{ func.name }} (Только просмотр)</h2>
+                <button class="cyber-btn" onclick="window.history.back()">
+                    <i class="fas fa-times"></i> Закрыть
+                </button>
+            </div>
+        {% else %}
+        <div class="editor-header cyber-glass">
+            <h2><i class="fab fa-python"></i> {{ func.name }}</h2>
+            <div class="editor-controls">
+                <button class="cyber-btn" onclick="saveFunction()">
+                    <i class="fas fa-save"></i> Сохранить
+                </button>
+                <button class="cyber-btn" onclick="testFunction()">
+                    <i class="fas fa-vial"></i> Тестировать
+                </button>
+                <button class="cyber-btn danger" onclick="window.history.back()">
+                    <i class="fas fa-times"></i> Закрыть
+                </button>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="editor-container">
+            <div class="code-editor">
+                <textarea id="functionCode">{{ code_content }}</textarea>
+            </div>
+            
+            <div class="function-info cyber-tile">
+                <div class="info-section">
+                    <h3><i class="fas fa-info-circle"></i> Информация о функции</h3>
+                    <div class="info-item">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value">{{ func.id }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Автор:</span>
+                        <span class="info-value">{{ func.author.username }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Статус:</span>
+                        <span class="info-value {{ 'approved' if func.approved else 'pending' }}">
+                            {{ '✓ Сейчас работает' if func.approved else '✗ Сейчас отключенна' }}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Создана:</span>
+                        <span class="info-value">{{ func.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                    </div>
+                </div>
+                
+                <div class="info-section">
+                    <h3><i class="fas fa-check-circle"></i> Требования</h3>
+                    <ul class="requirements-list">
+                        <li id="req-class"><i class="fas fa-check"></i> Должен быть класс Function</li>
+                        <li id="req-method-interaction"><i class="fas fa-check"></i> Должен быть метод interactionUser()</li>
+                        <li id="req-return"><i class="fas fa-check"></i> Метод interactionUser() должен возвращать dict</li>
+                        <li id="req-method-execute"><i class="fas fa-check"></i> Должен быть метод execute()</li>
+                    </ul>
+                </div>
+                
+                <div class="info-section">
+                    <h3><i class="fas fa-comment"></i> Описание</h3>
+                    <textarea id="functionDescription" class="cyber-input">{{ func.description }}</textarea>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-results" id="testResults">
+            <div id="resize"></div> 
+            <div class="results-header">
+                <h3><i class="fas fa-clipboard-check"></i> Результаты тестирования</h3>
+            </div>
+            <div class="results-content" id="testResultsContent">
+                </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/comment/comment.min.js"></script>
+
+    <script>
+        var functionId = {{ func.id }};
+        var func_test = {{ func.test_cases|safe }};
+    </script>
+
+    <script src="{{ url_for('static', filename='js/function-editor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/root-script.js') }}"></script>
+</body>
+</html>

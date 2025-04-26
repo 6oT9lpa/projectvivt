@@ -25,7 +25,7 @@
             </div>
             <div class="admin-nav-item" data-tab="functions" onclick="handleNavClick('functions', this)">
                 <i class="fas fa-code"></i>
-                <span>Функции</span>
+                <span>Модули</span>
                 <div class="nav-indicator"></div>
             </div>
         </nav>
@@ -86,10 +86,10 @@
             <!-- Функции -->
             <section class="admin-section" style='display: none;' id="functions">
                 <div class="section-header cyber-glow">
-                    <h2><i class="fas fa-cubes"></i> Управление функциями</h2>
+                    <h2><i class="fas fa-cubes"></i> Управление Модулями</h2>
                     <div class="function-controls">
                         <button class="cyber-btn" onclick="showCreateFunctionModal()">
-                            <i class="fas fa-plus"></i> Новая функция
+                            <i class="fas fa-plus"></i> Новый модуль
                         </button>
                     </div>
                 </div>
@@ -120,7 +120,7 @@
                         <div class="func-author">{{ func.author.username }}</div>
                         <div class="func-date">{{ func.created_at.strftime('%d.%m.%Y') }}</div>
                         <div class="func-actions">
-                            <button class="icon-btn" onclick="editFunction('{{ func.id }}')">
+                            <button class="icon-btn" onclick="window.location.href='/function/{{ func.id }}/edit'">
                                 <i class="fas fa-edit"></i>
                             </button>
                             <button class="icon-btn danger" onclick="deleteFunction('{{ func.id }}')">
@@ -252,6 +252,7 @@
                             <label class="cyber-label">Название группы</label>
                             <input type="text" id="roleName" class="cyber-input" placeholder="Cyber Admin">
                         </div>
+                        <!-- roleDescription сделать textarea -->
                         <div class="form-group">
                             <label class="cyber-label">Описание группы</label>
                             <input type="text" id="roleDescription" class="cyber-input" placeholder="Cyber Admin">

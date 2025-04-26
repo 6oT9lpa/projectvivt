@@ -1,13 +1,21 @@
-from flask import render_template, redirect, url_for, request, Blueprint, session, jsonify
+from flask import render_template, redirect, url_for, request, Blueprint, session, jsonify, send_from_directory
 from sqlalchemy.exc import SQLAlchemyError
 from flask_socketio import join_room, emit
-from docker import DockerClient
 from flask_login import login_user, login_required, logout_user, current_user
-from datetime import datetime
 import traceback, json
 from limiter import limiter
+import os
+from werkzeug.utils import secure_filename
+from PIL import Image
+from PIL import Image, ImageDraw
 
 main = Blueprint('main', __name__)
+
+def allowed_file(filename):
+    from __init__ import app
+    
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 @main.route('/')
 @limiter.limit("10 per minute")
@@ -16,6 +24,19 @@ def index():
         return redirect(url_for('main.profile'))
     
     return render_template('index.html', show_login_modal=session.pop('login_redirect', False))
+
+@main.route('/function/<int:func_id>/edit')
+@login_required
+@limiter.limit("10 per minute")
+def edit_function_page(func_id):
+    from __init__ import FunctionUser, app
+    
+    function = FunctionUser.query.get_or_404(func_id)
+    filepath = os.path.join(app.config['FUNCTION_MODELS_FOLDER'], function.code)
+    with open(filepath, 'r', encoding='utf-8') as f:
+        code_content = f.read()
+    
+    return render_template('function_editor.html', func=function, code_content=code_content)
 
 @main.route('/auth', methods=['GET'])
 @limiter.limit("10 per minute")
@@ -136,7 +157,9 @@ def profile():
     from __init__ import Chat, FunctionUser
     chat = Chat.query.filter_by(user_id=current_user.id).first()
     
-    return render_template('profile.html', chat=chat)
+    show_all = any(role.is_admin for role in current_user.roles)
+    
+    return render_template('profile.html', chat=chat, show_all_functions=show_all)
 
 @main.route('/logout', methods=['GET', 'POST'])
 @login_required
@@ -150,6 +173,7 @@ def logout():
 
 @main.route('/admin-panel')
 @login_required
+@limiter.limit("10 per minute")
 def admin_panel():
     if not current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -177,6 +201,7 @@ def admin_panel():
 
 @main.route('/get-user-data/<int:user_id>', methods=['GET'])
 @login_required
+@limiter.limit("10 per minute")
 def get_user_data(user_id):
     from __init__ import User, FunctionUser
     
@@ -192,6 +217,7 @@ def get_user_data(user_id):
     
 @main.route('/update-user/<int:user_id>', methods=['PUT'])
 @login_required
+@limiter.limit("3 per minute")
 def update_user(user_id):
     from __init__ import User, Role, db
     
@@ -222,6 +248,7 @@ def check_status():
 
 @main.route('/api/roles', methods=['GET'])
 @login_required
+@limiter.limit("10 per minute")
 def get_all_roles():
     from __init__ import Role
     roles = Role.query.all()
@@ -320,7 +347,7 @@ def handle_role(role_id=None):
 @login_required
 @limiter.limit("3 per minute")
 def create_function():
-    from __init__ import FunctionUser, db
+    from __init__ import FunctionUser, db, app
     
     try:
         name = request.form.get('name')
@@ -335,10 +362,18 @@ def create_function():
         if function_type not in ["text/code", "image", "link"]:
             return jsonify({"success": False, "error": "Тип функции не соответсвует"}), 400
         
+        os.makedirs(app.config['FUNCTION_MODELS_FOLDER'], exist_ok=True)
+        
+        existing_files = os.listdir(app.config['FUNCTION_MODELS_FOLDER'])
+        file_number = len(existing_files) + 1
+        filename = f"func_model{file_number:02d}.py"
+        filepath = os.path.join(app.config['FUNCTION_MODELS_FOLDER'], filename)
+        
         if 'file' in request.files:
             file = request.files['file']
             if file and file.filename.endswith('.py'):
                 code = file.read().decode('utf-8')
+                code = code.replace('\r\n', '\n').replace('\r', '\n')
                 name = name or file.filename[:-3]
         
         if not name or not code:
@@ -384,15 +419,18 @@ def create_function():
                 return jsonify({"success": False, "error": "Метод interactionUser должен возвращать словарь"}), 400
         except Exception as e:
             return jsonify({"success": False, "error": f"Ошибка выполнения interactionUser: {str(e)}"}), 400
-            
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(code)
+        
         func = FunctionUser(
             name=name,
-            code=code,
+            code=filename,  
             user_id=current_user.id,
             approved=False,
             description=description,
             function_type=function_type,
-            test_cases=test_cases
+            test_cases=test_cases.replace('\r\n', '').replace('\r', '') if test_cases != '' else []
         )
         db.session.add(func)
         db.session.commit()
@@ -421,7 +459,68 @@ def delete_function(func_id):
         "success": True,
         "message": "Функция удалена"
     })
+
+@main.route('/function/<int:func_id>')
+@login_required
+@limiter.limit("5 per minute")
+def view_function(func_id):
+    from __init__ import FunctionUser
+    func = FunctionUser.query.get_or_404(func_id)
+    return render_template('function_editor.html', function=func, view_only=True)
+
+@main.route('/api/function/<int:func_id>', methods=['PUT'])
+@login_required
+@limiter.limit("3 per minute")
+def update_function(func_id):
+    from __init__ import FunctionUser, db, app
+    import os
     
+    func = FunctionUser.query.get_or_404(func_id)
+    data = request.json
+    new_code = data['code']
+    
+    if 'description' in data:
+        func.description = data['description']
+    
+    try:
+        if 'code' in data:
+            exec_globals = {}
+            exec_locals = {}
+            exec(new_code, exec_globals, exec_locals)
+            
+            Function = exec_globals.get('Function') or exec_locals.get('Function')
+            if not Function:
+                return jsonify({"success": False, "error": "Не найден класс Function"}), 400
+                
+            if not hasattr(Function, 'interactionUser') or not callable(Function.interactionUser):
+                return jsonify({"success": False, "error": "Класс Function должен содержать метод interactionUser"}), 400
+            
+            if not hasattr(Function, 'execute') or not callable(Function.execute):
+                return jsonify({"success": False, "error": "Класс Function должен содержать метод execute"}), 400
+                
+            interaction_info = Function().interactionUser()
+            if not isinstance(interaction_info, dict):
+                return jsonify({"success": False, "error": "Метод interactionUser должен возвращать словарь"}), 400
+            
+            filename = func.code
+            filepath = os.path.join(app.config['FUNCTION_MODELS_FOLDER'], filename)
+            
+            try:
+                with open(filepath, 'w+', encoding='utf-8') as f:
+                    f.write(new_code)
+            except Exception as e:
+                return jsonify({"success": False, "error": f"Ошибка записи в файл: {str(e)}"}), 500
+    
+        db.session.commit()
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 400
+
 @main.route('/api/function/<int:func_id>/toggle', methods=['POST'])
 @login_required
 @limiter.limit("3 per minute")
@@ -444,7 +543,7 @@ def test_function():
     try:
         data = request.json
         code = data.get('code')
-        test_cases = data.get('test_cases', [])
+        test_cases = data.get('test_case', [])
         
         if not code:
             return jsonify({"success": False, "error": "Код функции отсутствует"}), 400
@@ -486,11 +585,10 @@ def test_function():
         
         results = []
         for test_case in test_cases:
+            instance = Function()
+            input_data = test_case.get('input', {})
+            expected = test_case.get('expected')
             try:
-                instance = Function()
-                input_data = test_case.get('input', {})
-                expected = test_case.get('expected')
-                
                 result = instance.execute(input_data)
                 
                 passed = (expected is None) or (str(result) == str(expected))
@@ -532,19 +630,22 @@ def test_function():
         
 @main.route('/api/function/<int:func_id>/interaction', methods=['GET'])
 @login_required
+@limiter.limit("8 per minute")
 def get_function_interaction(func_id):
-    from __init__ import FunctionUser
+    from __init__ import FunctionUser, app
     
-    func = FunctionUser.query.get_or_404(func_id)
+    func= FunctionUser.query.get_or_404(func_id)
+    filepath = os.path.join(app.config['FUNCTION_MODELS_FOLDER'], func.code)
+    with open(filepath, 'r', encoding='utf-8') as f:
+        code_content = f.read()
     
     if not func.approved:
-        return jsonify({"success": False, "error": "Функция не одобрена"}), 403
-    
+        return jsonify({"success": False, "error": "Функция не одобрена"}), 403   
     
     exec_globals = {}
     exec_locals = {}
     try:
-        exec(func.code, exec_globals, exec_locals)
+        exec(code_content, exec_globals, exec_locals)
     except SyntaxError as e:
         return jsonify({
             "success": False,
@@ -567,12 +668,14 @@ def get_function_interaction(func_id):
     interaction_info = Function().interactionUser()
     return jsonify({
         "success": True,
+        "id": func_id,
         "name": func.name,
         "interaction": interaction_info
     })
 
 @main.route('/api/function/execution', methods=['POST'])
 @login_required
+@limiter.limit("3 per minute")
 def save_function_execution():
     from __init__ import FunctionExecution, db
     
@@ -600,13 +703,14 @@ def save_function_execution():
 
 @main.route('/api/function/<int:func_id>/execute', methods=['POST'])
 @login_required
+@limiter.limit("3 per minute")
 def execute_function(func_id):
-    from __init__ import FunctionUser, FunctionExecution, db
+    from __init__ import FunctionUser, app
+    import os
+    from werkzeug.utils import secure_filename
     
     func = FunctionUser.query.get_or_404(func_id)
-    data = request.json
-    args = data.get('arguments', {})
-    
+
     if not func.approved:
         return jsonify({"success": False, "error": "Функция не одобрена"}), 403
     
@@ -614,10 +718,43 @@ def execute_function(func_id):
         return jsonify({"success": False, "error": "Нет доступа к этой функции"}), 403
     
     try:
-        # Выполняем код функции
+        files = request.files.getlist('files')
+        args = {}
+        
+        uploaded_files = []
+        if files and files[0].filename != '':
+            args = json.loads(request.form.get('arguments', '{}'))
+            
+            upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'yolo_detect')
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            for file in files:
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(upload_folder, filename)
+                    try:
+                        file.save(filepath)
+                        uploaded_files.append(filepath)
+                    except Exception as e:
+                        return jsonify({"success": False, "error": f"Ошибка сохранения файла: {str(e)}"}), 500
+                elif file:
+                    return jsonify({"success": False, "error": f"Недопустимый тип файла: {file.filename}"}), 400
+        else:
+            args = request.get_json().get('arguments', {})
+        
+        print(args)
+        
+        if uploaded_files:
+            args['img_paths'] = uploaded_files 
+        
+        filepath = os.path.join(app.config['FUNCTION_MODELS_FOLDER'], func.code)
+        
+        with open(filepath, 'r', encoding='utf-8') as f:
+            code = f.read()
+        
         exec_globals = {}
         exec_locals = {}
-        exec(func.code, exec_globals, exec_locals)
+        exec(code, exec_globals, exec_locals)
         
         Function = exec_globals.get('Function') or exec_locals.get('Function')
         if not Function:
@@ -629,9 +766,16 @@ def execute_function(func_id):
         instance = Function()
         result = instance.execute(args)
         
+        if isinstance(result, dict):
+            for key, value in result.items():
+                if isinstance(value, str) and app.config['UPLOAD_FOLDER'] in value:
+                    result[key] = value.replace(app.config['UPLOAD_FOLDER'], 'uploads').replace('\\', '/')
+                elif isinstance(value, list): 
+                    result[key] = [item.replace(app.config['UPLOAD_FOLDER'], 'uploads').replace('\\', '/') if isinstance(item, str) and app.config['UPLOAD_FOLDER'] in item else item for item in value]
+        
         return jsonify({
             "success": True,
-            "result": str(result)
+            "result": result
         })
         
     except Exception as e:
@@ -640,3 +784,46 @@ def execute_function(func_id):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 400
+        
+@main.route('/uploads/<path:filename>')
+@limiter.limit("10 per minute")
+def uploaded_file(filename):
+    from __init__ import app
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@main.route('/api/function/executions', methods=['GET'])
+@login_required
+@limiter.limit("10 per minute")
+def get_function_executions():
+    from __init__ import FunctionExecution, FunctionUser, db
+    executions = (db.session.query(FunctionExecution, FunctionUser)
+                .join(FunctionUser, FunctionExecution.function_id == FunctionUser.id)
+                .filter(FunctionExecution.user_id == current_user.id)
+                .order_by(FunctionExecution.timestamp.desc())
+                .limit(20)
+                .all())
+    
+    result = []
+    for execution, func in executions:
+        try:
+            parsed_result = json.loads(execution.result)
+            display_result = parsed_result.get('message', str(parsed_result))
+        except:
+            display_result = execution.result
+        
+        result.append({
+            'id': execution.id,
+            'function': {
+                'id': func.id,
+                'name': func.name
+            },
+            'arguments': execution.arguments,
+            'result': display_result,
+            'success': execution.success,
+            'timestamp': execution.timestamp.isoformat()
+        })
+    
+    return jsonify({
+        "success": True,
+        "executions": result
+    })
